@@ -7,7 +7,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Sunroof.KansasComet
+module Language.Sunroof.Server
   -- Basic Comet
   ( syncJS
   , asyncJS
