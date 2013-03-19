@@ -61,19 +61,13 @@ import Web.KansasComet
   , kCometPlugin )
 import qualified Web.KansasComet as KC
 
-import Language.Sunroof.Types
-import Language.Sunroof.Selector
+import Language.Sunroof
 import Language.Sunroof.JavaScript
-  ( Expr, Type(Unit)
+  ( Expr
   , literal, showExpr
   , scopeForEffect )
-import Language.Sunroof.Classes ( Sunroof(..), SunroofValue(..), Uniq )
-import Language.Sunroof.Compiler ( compileJSI, extractProgramJS, CompilerOpts(..) )
-import Language.Sunroof.JS.Bool ( JSBool )
-import Language.Sunroof.JS.Object ( object )
-import Language.Sunroof.JS.String ( JSString )
-import Language.Sunroof.JS.Number ( JSNumber )
-import Language.Sunroof.JS.Array ( JSArray )
+import Language.Sunroof.Classes ( Uniq )
+import Language.Sunroof.Compiler ( compileJSI, extractProgramJS )
 
 -- -------------------------------------------------------------
 -- Communication and Compilation
@@ -446,16 +440,18 @@ getUplink (Uplink eng u) = do
   -- TODO: make this throw an exception if it goes wrong (I supose error does this already)
   return $ jsonToValue (Proxy :: Proxy a) val
 
-data Downlink a = Downlink SunroofEngine Int
+data Downlink a = Downlink SunroofEngine (JSChan a)
 
-newDownlink :: SunroofEngine -> IO (Downlink a)
-newDownlink _eng = do undefined
+newDownlink :: forall a . (Sunroof a, SunroofArgument a) => SunroofEngine -> IO (Downlink a)
+newDownlink eng = do
+  chan <- rsyncJS eng (newChan :: JSA (JSChan a))
+  return $ Downlink eng chan
 
-putDownlink :: (Sunroof a) => Downlink a -> a -> IO ()
-putDownlink = undefined
+putDownlink :: forall a . (Sunroof a, SunroofArgument a) => Downlink a -> a -> IO ()
+putDownlink (Downlink eng chan) val = asyncJS eng $ (writeChan val chan :: JSB ())
 
-getDownlink :: forall a . (SunroofResult a) => Downlink a -> JS B (ResultOf a)
-getDownlink = undefined
+getDownlink :: forall a . (Sunroof a, SunroofArgument a) => Downlink a -> JS B a
+getDownlink (Downlink _eng chan) = readChan chan
 
 -- -------------------------------------------------------------
 -- Comet Javascript API
