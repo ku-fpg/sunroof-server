@@ -233,7 +233,7 @@ type SunroofApp = SunroofEngine -> IO ()
 --   [@cometPort@] The port the server is reachable from.
 --
 --   [@cometResourceBaseDir@] Will be used as base directory to
---     search for the @css@ and @js@ folders which will be forwarded.
+--     search for the @css@, @img@ and @js@ folders which will be forwarded.
 --
 --   [@cometIndexFile@] The file to be used as index file.
 --
@@ -259,15 +259,26 @@ data SunroofServerOptions = SunroofServerOptions
 --   The @opts@ give various configuration for the comet server.
 --   See 'SunroofServerOptions' for further information on this.
 --   The application to run is given by @app@. It takes the current
---   engine/document as parameter. The document is needed for calls to 'sync',
---   'async' and 'rsync'.
+--   engine/document as parameter. The document is needed for calls to 'syncJS',
+--   'asyncJS' and 'rsyncJS'.
 --
 --   The server provides the kansas comet Javascript on the path
 --   @js/kansas-comet.js@.
+--   
+--   Since @kansas-comet.js@ is a JQuery plugin you have to also 
+--   load a decent version of @jquery.js@ (or @jquery.min.js@)
+--   and also @jquery-json.js@. They are available at:
+--   
+--    * <http://jquery.com/>
+--    
+--    * <https://code.google.com/p/jquery-json/>
 --
 --   For the index file to setup the communication correctly with the comet
---   server it has to load the @kansas-comet.js@ inside the @head@:
+--   server it has to load the @kansas-comet.js@ after the JQuery code 
+--   inside the @head@ (assuming you placed the JQuery code under @js/@):
 --
+-- >   <script type="text/javascript" src="js/jquery.js"></script>
+-- >   <script type="text/javascript" src="js/jquery-json.js"></script>
 -- >   <script type="text/javascript" src="js/kansas-comet.js"></script>
 --
 --   It also has to execute the following Javascript at the end of the
@@ -281,8 +292,8 @@ data SunroofServerOptions = SunroofServerOptions
 --
 --   The string @/ajax@ has to be set to whatever the comet prefix
 --   in the 'Options' provided by the 'SunroofServerOptions' is.
---   These snippits will work for the 'defaultServerOpts'.
---
+--   These snippits will work for the 'def' instance.
+--   
 --   Additional debug information can be displayed in the browser when
 --   adding the following element to the index file:
 --
@@ -300,7 +311,7 @@ sunroofServer opts cometApp = do
     kcomet <- liftIO kCometPlugin
     let pol = only [("", cometIndexFile opts)
                    ,("js/kansas-comet.js", kcomet)]
-              <|> ((hasPrefix "css/" <|> hasPrefix "js/")
+              <|> ((hasPrefix "css/" <|> hasPrefix "js/" <|> hasPrefix "img/")
                    >-> addBase (cometResourceBaseDir opts))
     SC.middleware $ staticPolicy pol
     connect (cometOptions opts) $ wrapDocument opts cometApp
