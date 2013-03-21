@@ -46,6 +46,7 @@ import Data.Semigroup
 import Data.Time.Clock
 import qualified Data.Vector as V
 import qualified Data.HashMap.Strict as M
+import System.FilePath((</>))
 
 import Control.Monad.IO.Class ( liftIO )
 import Control.Concurrent.STM
@@ -246,8 +247,8 @@ type SunroofApp = SunroofEngine -> IO ()
 --   See 'sunroofCometServer' and 'defaultServerOpts' for further information.
 data SunroofServerOptions = SunroofServerOptions
   { cometPort :: Port
-  , cometResourceBaseDir :: FilePath
-  , cometIndexFile :: FilePath
+  , cometResourceBaseDir :: FilePath    -- ^ make absolute to run server from anywhere
+  , cometIndexFile :: FilePath          -- ^ relative to the ResourceBaseDir
   , cometOptions :: Options
   , sunroofVerbose :: Int -- 0 == none, 1 == inits, 2 == cmds done, 3 == complete log
   , sunroofCompilerOpts :: CompilerOpts
@@ -298,7 +299,8 @@ sunroofServer opts cometApp = do
                           , SC.settings = warpSettings }
   SC.scottyOpts scottyOptions $ do
     kcomet <- liftIO kCometPlugin
-    let pol = only [("", cometIndexFile opts)
+    let rootFile = cometResourceBaseDir opts </> cometIndexFile opts
+    let pol = only [("", rootFile)
                    ,("js/kansas-comet.js", kcomet)]
               <|> ((hasPrefix "css/" <|> hasPrefix "js/")
                    >-> addBase (cometResourceBaseDir opts))
