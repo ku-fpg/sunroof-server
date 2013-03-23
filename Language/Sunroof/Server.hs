@@ -16,8 +16,9 @@
 --   The sent data is queued and operations block properly if there
 --   is no data available.
 module Language.Sunroof.Server
+  ( 
   -- * Basic Comet Server
-  ( syncJS
+    syncJS
   , asyncJS
   , rsyncJS
   , SunroofResult(..)
@@ -85,11 +86,17 @@ import Language.Sunroof.Compiler ( compileJSI, extractProgramJS )
 -- | The 'SunroofEngine' provides the verbosity level and
 --   kansas comet document to the 'SunroofApp'.
 data SunroofEngine = SunroofEngine
-  { cometDocument :: Document   -- ^ The document comet uses to manage the connected website.
-  , uVar          :: TVar Uniq  -- ^ Unique number supply for our engine
-  , engineVerbose :: Int        -- ^ 0 == none, 1 == inits, 2 == cmds done, 3 == complete log
-  , compilerOpts  :: CompilerOpts -- ^ The options used to setup the compiler.
-  , timings       :: Maybe (TVar (Timings NominalDiffTime)) -- ^ Performance timings of the compiler and communication.
+  { cometDocument :: Document
+  -- ^ The document comet uses to manage the connected website.
+  , uVar          :: TVar Uniq
+  -- ^ Unique number supply for our engine
+  , engineVerbose :: Int
+  -- ^ @0@ for none, @1@ for initializations,
+  --   @2@ for commands done and @3@ for a complete log.
+  , compilerOpts  :: CompilerOpts
+  -- ^ The options used to setup the compiler.
+  , timings       :: Maybe (TVar (Timings NominalDiffTime))
+  -- ^ Performance timings of the compiler and communication.
   }
 
 -- | Generate one unique integer from the document.
@@ -222,27 +229,26 @@ type SunroofApp = SunroofEngine -> IO ()
 -- | The 'SunroofServerOptions' specify the configuration of the
 --   sunroof comet server infrastructure.
 --
---   [@cometPort@] The port the server is reachable from.
---
---   [@cometResourceBaseDir@] Will be used as base directory to
---     search for the @css@, @img@ and @js@ folders which will be forwarded.
---
---   [@cometIndexFile@] The file to be used as index file.
---
---   [@cometOptions@] Provides the kansas comet options to use.
---     Default options are provided with the 'defaultServerOpts'.
---
---   [@sunroofVerbose@] @0@ for none, @1@ for initializations,
---     @2@ for commands done and @3@ for a complete log.
---
---   See 'sunroofServer' and 'defaultServerOpts' for further information.
+--   See 'sunroofServer' and 'SunroofServerOptions' for further information.
 data SunroofServerOptions = SunroofServerOptions
   { cometPort :: Port
-  , cometResourceBaseDir :: FilePath    -- ^ make absolute to run server from anywhere
-  , cometIndexFile :: FilePath          -- ^ relative to the ResourceBaseDir
+  -- ^ The port the server is reachable from.
+  , cometResourceBaseDir :: FilePath
+  -- ^ Will be used as base directory to
+  --   search for the @css@, @img@ and @js@ folders which will be forwarded
+  --   by the server. Make this path absolute to run the server from anywhere.
+  , cometIndexFile :: FilePath 
+  -- ^ The file to be used as index file (or landing page).
+  --   This path is given relative to the 'cometResourceBaseDir'.
   , cometOptions :: Options
-  , sunroofVerbose :: Int -- ^ 0 == none, 1 == inits, 2 == cmds done, 3 == complete log
+  -- ^ Provides the kansas comet options to use.
+  --   Default options are provided with the 'Data.Default.def' instance.
+  , sunroofVerbose :: Int 
+  -- ^ @0@ for none, @1@ for initializations,
+  --   @2@ for commands done and @3@ for a complete log.
   , sunroofCompilerOpts :: CompilerOpts
+  -- ^ The set of options to configure the Sunroof compiler.
+  --   Default options are provided with the 'Data.Default.def' instance.
   }
 
 -- | Sets up a comet server ready to use with sunroof.
@@ -429,7 +435,7 @@ class (Sunroof a) => SunroofResult a where
   --   not be converted.
   jsonToValue :: Proxy a -> Value -> ResultOf a
 
--- | @null@ can be translated to unit.
+-- | @null@ can be translated to @()@.
 instance SunroofResult () where
   type ResultOf () = ()
   jsonToValue _ (Null) = ()
@@ -454,7 +460,7 @@ instance SunroofResult JSString where
   jsonToValue _ (String s) = unpack s
   jsonToValue _ v = error $ "jsonToValue: JSON value is not a string: " ++ show v
 
--- | 'JSArray a' can be translated to '[ResultOf a]'.
+-- | 'JSArray' can be translated to a list of the 'ResultOf' the values.
 instance forall a . SunroofResult a => SunroofResult (JSArray a) where
   type ResultOf (JSArray a) = [ResultOf a]
   jsonToValue _ (Array ss) = map (jsonToValue (Proxy :: Proxy a)) $ V.toList ss
