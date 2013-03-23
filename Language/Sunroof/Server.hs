@@ -460,8 +460,10 @@ newDownlink eng = do
   chan <- rsyncJS eng (newChan :: JSA (JSChan a))
   return $ Downlink eng chan
 
-putDownlink :: forall a . (Sunroof a, SunroofArgument a) => Downlink a -> a -> IO ()
-putDownlink (Downlink eng chan) val = asyncJS eng $ (writeChan val chan :: JSB ())
+putDownlink :: forall a . (Sunroof a, SunroofArgument a) => Downlink a -> JS A a -> IO ()
+putDownlink (Downlink eng chan) val = asyncJS eng $ do
+  v <- val
+  chan # writeChan v
 
 getDownlink :: forall a . (Sunroof a, SunroofArgument a) => Downlink a -> JS B a
 getDownlink (Downlink _eng chan) = readChan chan
