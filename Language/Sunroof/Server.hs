@@ -1,14 +1,22 @@
 
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE RankNTypes #-}
 
+-- | The Sunroof server module provides infrastructure to use
+--   Sunroof together with kansas-comet.
+--   
+--   It supports setting up a simple server with 'sunroofServer'
+--   and provides basic functions for serverside communication 
+--   with the connected website ('syncJS', 'asyncJS' and 'rsyncJS').
+--   
+--   This module also provides the abstractions for 'Downlink'
+--   and 'Uplink'. They represent directed channels for sending data
+--   from the server to the website and the other way aroun.
+--   The sent data is queued and operations block properly if there
+--   is no data available.
 module Language.Sunroof.Server
-  -- Basic Comet
+  -- * Basic Comet Server
   ( syncJS
   , asyncJS
   , rsyncJS
@@ -19,17 +27,17 @@ module Language.Sunroof.Server
   , SunroofServerOptions(..)
   , SunroofApp
   , debugSunroofEngine
-  -- Uplink
-  , Uplink
-  , newUplink
-  , getUplink
-  , putUplink
-  -- Downlink
+  -- * Downlink
   , Downlink
   , newDownlink
   , getDownlink
   , putDownlink
-  -- Timing
+  -- * Uplink
+  , Uplink
+  , newUplink
+  , getUplink
+  , putUplink
+  -- * Timing
   , Timings(..)
   , newTimings
   , resetTimings
@@ -77,19 +85,18 @@ import Language.Sunroof.Compiler ( compileJSI, extractProgramJS )
 -- | The 'SunroofEngine' provides the verbosity level and
 --   kansas comet document to the 'SunroofApp'.
 data SunroofEngine = SunroofEngine
-  { cometDocument :: Document
-  , uVar          :: TVar Int   -- Uniq number supply for our engine
-  , engineVerbose :: Int        -- 0 == none, 1 == inits, 2 == cmds done, 3 == complete log
-  , compilerOpts  :: CompilerOpts
-  , timings       :: Maybe (TVar (Timings NominalDiffTime))
+  { cometDocument :: Document   -- ^ The document comet uses to manage the connected website.
+  , uVar          :: TVar Uniq  -- ^ Unique number supply for our engine
+  , engineVerbose :: Int        -- ^ 0 == none, 1 == inits, 2 == cmds done, 3 == complete log
+  , compilerOpts  :: CompilerOpts -- ^ The options used to setup the compiler.
+  , timings       :: Maybe (TVar (Timings NominalDiffTime)) -- ^ Performance timings of the compiler and communication.
   }
 
--- TODO: rename these internal functions?
--- Generate one unique integer from the document.
+-- | Generate one unique integer from the document.
 docUniq :: SunroofEngine -> IO Int
 docUniq = docUniqs 1
 
--- Generate n unique integers from the document.
+-- | Generate n unique integers from the document.
 docUniqs :: Int -> SunroofEngine -> IO Int
 docUniqs n doc = atomically $ do
         u <- readTVar (uVar doc)
@@ -115,7 +122,6 @@ compileLog engine src = do
   sequence_ $ fmap (sunroofLog engine 3) $
     [ "Compiled:", src]
   return ()
-
 
 -- | Compile js using unique variables each time.
 compileRequestJS :: SunroofEngine -> JS t () -> IO String
@@ -153,27 +159,9 @@ asyncJS engine jsm = do
   addSendTime engine t1
   return ()
 
-{-
--- | Executes the Javascript in the browser and waits for the result.
---   The returned value is just a reference to the computed value.
-rsync :: (Sunroof a) => SunroofEngine -> JS A a -> IO a
-rsync engine jsm = do
-  (src, retVar) <- compile engine jsm
-  case retVar of
-    "" -> do
-      error "rsync: Javascript does not have a return value."
-    ret -> do
-      -- No synchronous call, because this might evaluate
-      -- to something that is not representable as JSON.
-      -- Also like this we save the bandwidth for transporting
-      -- back the value.
-      send (cometDocument engine) $ src -- send it, and forget it
-      return $ box $ Lit ret
--}
 -- | Executes the Javascript in the browser and waits for the result value.
 --   The result value is given the corresponding Haskell type,
 --   if possible (see 'SunroofResult').
-
 syncJS :: forall a t . (SunroofResult a) => SunroofEngine -> JS t a -> IO (ResultOf a)
 syncJS engine jsm | typeOf (Proxy :: Proxy a) == Unit = do
   _ <- syncJS engine (jsm >> return (0 :: JSNumber))
@@ -195,6 +183,9 @@ syncJS engine jsm = do
   addWaitTime engine t2
   return r
 
+-- | Executes the Javascript in the browser and waits for the result.
+--   The returned value is just a reference to the computed value.
+--   This allows to precompile values like function in the browser.
 rsyncJS :: forall a t . (Sunroof a) => SunroofEngine -> JS t a -> IO a
 rsyncJS engine jsm = do
   uq <- docUniq engine   -- uniq for the value
@@ -244,19 +235,19 @@ type SunroofApp = SunroofEngine -> IO ()
 --   [@sunroofVerbose@] @0@ for none, @1@ for initializations,
 --     @2@ for commands done and @3@ for a complete log.
 --
---   See 'sunroofCometServer' and 'defaultServerOpts' for further information.
+--   See 'sunroofServer' and 'defaultServerOpts' for further information.
 data SunroofServerOptions = SunroofServerOptions
   { cometPort :: Port
   , cometResourceBaseDir :: FilePath    -- ^ make absolute to run server from anywhere
   , cometIndexFile :: FilePath          -- ^ relative to the ResourceBaseDir
   , cometOptions :: Options
-  , sunroofVerbose :: Int -- 0 == none, 1 == inits, 2 == cmds done, 3 == complete log
+  , sunroofVerbose :: Int -- ^ 0 == none, 1 == inits, 2 == cmds done, 3 == complete log
   , sunroofCompilerOpts :: CompilerOpts
   }
 
 -- | Sets up a comet server ready to use with sunroof.
 --
---   @sunroofCometServer opts app@:
+--   @sunroofServer opts app@:
 --   The @opts@ give various configuration for the comet server.
 --   See 'SunroofServerOptions' for further information on this.
 --   The application to run is given by @app@. It takes the current
@@ -301,7 +292,6 @@ data SunroofServerOptions = SunroofServerOptions
 -- >   <div id="debug-log"></div>
 --
 --   Look into the example folder to see all of this in action.
-
 sunroofServer :: SunroofServerOptions -> SunroofApp -> IO ()
 sunroofServer opts cometApp = do
   let warpSettings = (SC.settings def) { settingsPort = cometPort opts }
@@ -353,8 +343,78 @@ defaultServerOpts = SunroofServerOptions
   , sunroofCompilerOpts = def
   }
 
+-- | The 'defaultServerOpts'.
 instance Default SunroofServerOptions where
   def = defaultServerOpts
+
+-- -------------------------------------------------------------
+-- Downlink API
+-- -------------------------------------------------------------
+
+-- | 'Downlink's are an abstraction provided for sending 
+--   Javascript data from the server to the website.
+--   The type parameter describes the elements 
+--   that are transmited through the downlink.
+data Downlink a = Downlink SunroofEngine (JSChan a)
+
+-- | Create a new downlink.
+newDownlink :: forall a . (Sunroof a, SunroofArgument a) 
+            => SunroofEngine -> IO (Downlink a)
+newDownlink eng = do
+  chan <- rsyncJS eng (newChan :: JSA (JSChan a))
+  return $ Downlink eng chan
+
+-- | Send data to the website.
+putDownlink :: (Sunroof a, SunroofArgument a) 
+            => Downlink a -> JSA a -> IO ()
+putDownlink (Downlink eng chan) val = asyncJS eng $ do
+  v <- val
+  writeChan v chan
+
+-- | Request data in the downlink. This may block until
+--   data is available.
+getDownlink :: (Sunroof a, SunroofArgument a) 
+            => Downlink a -> JSB a
+getDownlink (Downlink _eng chan) = readChan chan
+
+-- -------------------------------------------------------------
+-- Uplink API
+-- -------------------------------------------------------------
+
+-- | 'Uplink's are an abstraction provided for sending 
+--   Javascript data from the website back to the server.
+--   Only data that can be translated back to a Haskell
+--   value can be sent back.
+--   The type parameter describes the elements 
+--   that are transmited through the uplink.
+data Uplink a = Uplink SunroofEngine Uniq
+
+-- | Create a new uplink.
+newUplink :: SunroofEngine -> IO (Uplink a)
+newUplink eng = do
+  u <- docUniq eng
+  return $ Uplink eng u
+
+-- | Send Javascript data back to the server.
+putUplink :: (Sunroof a) => a -> Uplink a -> JS t ()
+putUplink a (Uplink _ u) = kc_reply (js u) a
+
+-- | Request data in the uplink. This may block until
+--   data is available.
+getUplink :: forall a . (SunroofResult a) => Uplink a -> IO (ResultOf a)
+getUplink (Uplink eng u) = do
+  val <- KC.getReply (cometDocument eng) u
+  -- TODO: make this throw an exception if it goes wrong (I supose error does this already)
+  return $ jsonToValue (Proxy :: Proxy a) val
+
+-- -------------------------------------------------------------
+-- Comet Javascript API
+-- -------------------------------------------------------------
+
+-- | Binding for the Javascript function to send replies to the
+--   server.
+kc_reply :: (Sunroof a) => JSNumber -> a -> JS t ()
+kc_reply n a = fun "$.kc.reply" `apply` (n,a)
 
 -- -----------------------------------------------------------------------
 -- JSON Value to Haskell/Sunroof conversion
@@ -362,42 +422,43 @@ instance Default SunroofServerOptions where
 
 -- | Provides correspondant Haskell types for certain Sunroof types.
 class (Sunroof a) => SunroofResult a where
+  -- | The Haskell value type associated with this 'Sunroof' type.
   type ResultOf a
+  -- | Converts the given JSON value to the corresponding
+  --   Haskell value. A error is thrown if the JSON value can
+  --   not be converted.
   jsonToValue :: Proxy a -> Value -> ResultOf a
-  --toJS :: ValueOf a -> a
 
+-- | @null@ can be translated to unit.
 instance SunroofResult () where
   type ResultOf () = ()
   jsonToValue _ (Null) = ()
   jsonToValue _ v = error $ "jsonToValue: JSON value is not unit: " ++ show v
-  --toJS () = ()
 
+-- | 'JSBool' can be translated to 'Bool'.
 instance SunroofResult JSBool where
   type ResultOf JSBool = Bool
   jsonToValue _ (Bool b) = b
   jsonToValue _ v = error $ "jsonToValue: JSON value is not a boolean: " ++ show v
-  --toJS True = true
-  --toJS False = false
 
+-- | 'JSNumber' can be translated to 'Double'.
 instance SunroofResult JSNumber where
   type ResultOf JSNumber = Double
   jsonToValue _ (Number (I i)) = fromInteger i
   jsonToValue _ (Number (D d)) = d
   jsonToValue _ v = error $ "jsonToValue: JSON value is not a number: " ++ show v
-  --toJS = JSNumber . Lit . show
 
+-- | 'JSString' can be translated to 'String'.
 instance SunroofResult JSString where
   type ResultOf JSString = String
   jsonToValue _ (String s) = unpack s
   jsonToValue _ v = error $ "jsonToValue: JSON value is not a string: " ++ show v
-  --toJS = fromString
 
+-- | 'JSArray a' can be translated to '[ResultOf a]'.
 instance forall a . SunroofResult a => SunroofResult (JSArray a) where
   type ResultOf (JSArray a) = [ResultOf a]
   jsonToValue _ (Array ss) = map (jsonToValue (Proxy :: Proxy a)) $ V.toList ss
   jsonToValue _ v = error $ "jsonToValue: JSON value is not an array : " ++ show v
-  --toJS = fromString
-
 
 -- | Converts a JSON value to a Sunroof Javascript expression.
 jsonToJS :: Value -> Expr
@@ -405,12 +466,11 @@ jsonToJS (Bool b)       = unbox $ js b
 jsonToJS (Number (I i)) = unbox $ js i
 jsonToJS (Number (D d)) = unbox $ js d
 jsonToJS (String s)     = unbox $ js $ unpack s
--- TODO: This is only a hack. Could null be a good reprensentation for unit '()'?
 jsonToJS (Null)         = unbox $ nullJS
 jsonToJS (Array arr)    = jsonArrayToJS arr
 jsonToJS (Object obj)   = jsonObjectToJS obj
 
--- TODO: Some day find a Sunroof representation of this.
+-- | Converts a JSON object to a Sunroof expression.
 jsonObjectToJS :: Object -> Expr
 jsonObjectToJS obj = literal $
   let literalMap = M.toList $ fmap (show . jsonToJS) obj
@@ -418,7 +478,7 @@ jsonObjectToJS obj = literal $
       keyValues = fmap (\(k,v) -> convertKey k ++ ":" ++ v) literalMap
   in "{" ++ intercalate "," keyValues ++ "}"
 
--- TODO: Some day find a Sunroof representation of this.
+-- | Converts a JSON array to a Sunroof expression.
 jsonArrayToJS :: Array -> Expr
 jsonArrayToJS arr = literal $
   "(new Array(" ++ (intercalate "," $ V.toList $ fmap (show . jsonToJS) arr) ++ "))"
@@ -434,83 +494,49 @@ instance SunroofValue Text where
 -}
 
 -- -------------------------------------------------------------
--- Uplink and Downlink API
--- -------------------------------------------------------------
-
-data Uplink a = Uplink SunroofEngine Int
-
-newUplink :: SunroofEngine -> IO (Uplink a)
-newUplink eng = do
-  u <- docUniq eng
-  return $ Uplink eng u
-
-putUplink :: (Sunroof a) => a -> Uplink a -> JS t ()
-putUplink a (Uplink _ u) = kc_reply (js u) a
-
-getUplink :: forall a . (SunroofResult a) => Uplink a -> IO (ResultOf a)
-getUplink (Uplink eng u) = do
-  val <- KC.getReply (cometDocument eng) u
-  -- TODO: make this throw an exception if it goes wrong (I supose error does this already)
-  return $ jsonToValue (Proxy :: Proxy a) val
-
-data Downlink a = Downlink SunroofEngine (JSChan a)
-
-newDownlink :: forall a . (Sunroof a, SunroofArgument a) => SunroofEngine -> IO (Downlink a)
-newDownlink eng = do
-  chan <- rsyncJS eng (newChan :: JSA (JSChan a))
-  return $ Downlink eng chan
-
-putDownlink :: forall a . (Sunroof a, SunroofArgument a) => Downlink a -> JS A a -> IO ()
-putDownlink (Downlink eng chan) val = asyncJS eng $ do
-  v <- val
-  chan # writeChan v
-
-getDownlink :: forall a . (Sunroof a, SunroofArgument a) => Downlink a -> JS B a
-getDownlink (Downlink _eng chan) = readChan chan
-
--- -------------------------------------------------------------
--- Comet Javascript API
--- -------------------------------------------------------------
-
-kc_reply :: (Sunroof a) => JSNumber -> a -> JS t ()
-kc_reply n a = fun "$.kc.reply" `apply` (n,a)
-
--- -------------------------------------------------------------
 -- Debugging
 -- -------------------------------------------------------------
 
+-- | Setup a 'SunroofEngine' for debugging.
 debugSunroofEngine :: IO SunroofEngine
 debugSunroofEngine = do
   doc <- KC.debugDocument
   uqVar <- atomically $ newTVar 0
   return $ SunroofEngine doc uqVar 3 def Nothing
 
+-- | Timings for communication and compilation.
 data Timings a = Timings
-        { compileTime :: !a        -- how long spent compiling
-        , sendTime    :: !a        -- how long spent sending
-        , waitTime    :: !a        -- how long spent waiting for a response
+        { compileTime :: !a -- ^ How long spent compiling.
+        , sendTime    :: !a -- ^ How long spent sending.
+        , waitTime    :: !a -- ^ How long spent waiting for a response.
         }
         deriving Show
 
+-- | Apply a function by applying it to each timing.
 instance Functor Timings where
   fmap f (Timings t1 t2 t3) = Timings (f t1) (f t2) (f t3)
 
+-- | Combine timings by combining each single timing.
 instance Semigroup a => Semigroup (Timings a) where
   (Timings t1 t2 t3) <> (Timings u1 u2 u3)  = Timings (t1<>u1) (t2<>u2) (t3<>u3)
 
+-- | Create timings in the 'SunroofEngine'.
 newTimings :: SunroofEngine -> IO SunroofEngine
 newTimings e = do
         v <- atomically $ newTVar $ Timings 0 0 0
         return $ e { timings = Just v }
 
+-- | Reset all timings.
 resetTimings :: SunroofEngine -> IO ()
 resetTimings (SunroofEngine { timings = Nothing }) = return ()
 resetTimings (SunroofEngine { timings = Just t }) = atomically $ writeTVar t $ Timings 0 0 0
 
+-- | Get timings from the 'SunroofEngine'.
 getTimings :: SunroofEngine -> IO (Timings NominalDiffTime)
 getTimings (SunroofEngine { timings = Nothing }) = return $ Timings 0 0 0
 getTimings (SunroofEngine { timings = Just t }) = atomically $ readTVar t
 
+-- | Add a timing for compilation.
 addCompileTime :: SunroofEngine -> UTCTime -> IO ()
 addCompileTime (SunroofEngine { timings = Nothing }) _start = return ()
 addCompileTime (SunroofEngine { timings = Just t }) start = do
@@ -518,6 +544,7 @@ addCompileTime (SunroofEngine { timings = Just t }) start = do
         atomically $ modifyTVar t $ \ ts -> ts { compileTime = compileTime ts + diffUTCTime end start}
         return ()
 
+-- | Add a timing for sending.
 addSendTime :: SunroofEngine -> UTCTime -> IO ()
 addSendTime (SunroofEngine { timings = Nothing }) _start = return ()
 addSendTime (SunroofEngine { timings = Just t }) start = do
@@ -525,6 +552,7 @@ addSendTime (SunroofEngine { timings = Just t }) start = do
         atomically $ modifyTVar t $ \ ts -> ts { sendTime = sendTime ts + diffUTCTime end start}
         return ()
 
+-- | Add a timing for waiting for a response.
 addWaitTime :: SunroofEngine -> UTCTime -> IO ()
 addWaitTime (SunroofEngine { timings = Nothing }) _start = return ()
 addWaitTime (SunroofEngine { timings = Just t }) start = do
