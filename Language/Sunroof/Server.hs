@@ -62,8 +62,6 @@ import Control.Concurrent.STM
 
 import Network.Wai.Handler.Warp ( Port, settingsPort )
 import Network.Wai.Middleware.Static
-  ( only, hasPrefix, addBase, staticPolicy
-  , (<|>), (>->) )
 import qualified Web.Scotty as SC
 import Web.KansasComet
   ( send, connect
@@ -234,16 +232,19 @@ data SunroofServerOptions = SunroofServerOptions
   { cometPort :: Port
   -- ^ The port the server is reachable from.
   , cometResourceBaseDir :: FilePath
-  -- ^ Will be used as base directory to
-  --   search for the @css@, @img@ and @js@ folders which will be forwarded
-  --   by the server. Make this path absolute to run the server from anywhere.
-  , cometIndexFile :: FilePath 
+  -- ^ Will be used as base directory to search for all static files.
+  -- Make this path absolute to run the server from anywhere.
+  , cometIndexFile :: FilePath
   -- ^ The file to be used as index file (or landing page).
   --   This path is given relative to the 'cometResourceBaseDir'.
+  , cometPolicy :: Policy
+  -- ^ The default policy is to allow the @css@, @img@ and @js@
+  -- folders to be used by the server, as well as the noDots policy.
+  --  This policy can be overwritten to allow delivery of other files.
   , cometOptions :: Options
   -- ^ Provides the kansas comet options to use.
   --   Default options are provided with the 'Data.Default.def' instance.
-  , sunroofVerbose :: Int 
+  , sunroofVerbose :: Int
   -- ^ @0@ for none, @1@ for initializations,
   --   @2@ for commands done and @3@ for a complete log.
   , sunroofCompilerOpts :: CompilerOpts
@@ -307,9 +308,10 @@ sunroofServer opts cometApp = do
   SC.scottyOpts scottyOptions $ do
     kcomet <- liftIO kCometPlugin
     let rootFile = cometResourceBaseDir opts </> cometIndexFile opts
+    let custom_policy = cometPolicy opts
     let pol = only [("", rootFile)
                    ,("js/kansas-comet.js", kcomet)]
-              <|> ((hasPrefix "css/" <|> hasPrefix "js/" <|> hasPrefix "img/")
+              <|> (custom_policy
                    >-> addBase (cometResourceBaseDir opts))
     SC.middleware $ staticPolicy pol
     connect (cometOptions opts) $ wrapDocument opts cometApp
@@ -344,10 +346,16 @@ defaultServerOpts = SunroofServerOptions
   { cometPort = 3000
   , cometResourceBaseDir = "."
   , cometIndexFile = "index.html"
+  , cometPolicy = defaultPolicy
   , cometOptions = def { KC.prefix = "/ajax", KC.verbose = 0 }
   , sunroofVerbose = 0
   , sunroofCompilerOpts = def
   }
+
+defaultPolicy :: Policy
+defaultPolicy = noDots >-> (hasPrefix "css/" <|>
+                            hasPrefix "js/"  <|>
+                            hasPrefix "img/")
 
 -- | The 'defaultServerOpts'.
 instance Default SunroofServerOptions where
