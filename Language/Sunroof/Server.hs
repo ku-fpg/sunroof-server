@@ -5,18 +5,18 @@
 
 -- | The Sunroof server module provides infrastructure to use
 --   Sunroof together with kansas-comet.
---   
+--
 --   It supports setting up a simple server with 'sunroofServer'
---   and provides basic functions for serverside communication 
+--   and provides basic functions for serverside communication
 --   with the connected website ('syncJS', 'asyncJS' and 'rsyncJS').
---   
+--
 --   This module also provides the abstractions for 'Downlink'
 --   and 'Uplink'. They represent directed channels for sending data
 --   from the server to the website and the other way aroun.
 --   The sent data is queued and operations block properly if there
 --   is no data available.
 module Language.Sunroof.Server
-  ( 
+  (
   -- * Basic Comet Server
     syncJS
   , asyncJS
@@ -263,17 +263,17 @@ data SunroofServerOptions = SunroofServerOptions
 --
 --   The server provides the kansas comet Javascript on the path
 --   @js/kansas-comet.js@.
---   
---   Since @kansas-comet.js@ is a JQuery plugin you have to also 
+--
+--   Since @kansas-comet.js@ is a JQuery plugin you have to also
 --   load a decent version of @jquery.js@ (or @jquery.min.js@)
 --   and also @jquery-json.js@. They are available at:
---   
+--
 --    * <http://jquery.com/>
---    
+--
 --    * <https://code.google.com/p/jquery-json/>
 --
 --   For the index file to setup the communication correctly with the comet
---   server it has to load the @kansas-comet.js@ after the JQuery code 
+--   server it has to load the @kansas-comet.js@ after the JQuery code
 --   inside the @head@ (assuming you placed the JQuery code under @js/@):
 --
 -- >   <script type="text/javascript" src="js/jquery.js"></script>
@@ -292,7 +292,7 @@ data SunroofServerOptions = SunroofServerOptions
 --   The string @/ajax@ has to be set to whatever the comet prefix
 --   in the 'Options' provided by the 'SunroofServerOptions' is.
 --   These snippits will work for the 'def' instance.
---   
+--
 --   Additional debug information can be displayed in the browser when
 --   adding the following element to the index file:
 --
@@ -365,21 +365,21 @@ instance Default SunroofServerOptions where
 -- Downlink API
 -- -------------------------------------------------------------
 
--- | 'Downlink's are an abstraction provided for sending 
+-- | 'Downlink's are an abstraction provided for sending
 --   Javascript data from the server to the website.
---   The type parameter describes the elements 
+--   The type parameter describes the elements
 --   that are transmited through the downlink.
 data Downlink a = Downlink SunroofEngine (JSChan a)
 
 -- | Create a new downlink.
-newDownlink :: forall a . (Sunroof a, SunroofArgument a) 
+newDownlink :: forall a . (Sunroof a, SunroofArgument a)
             => SunroofEngine -> IO (Downlink a)
 newDownlink eng = do
   chan <- rsyncJS eng (newChan :: JSA (JSChan a))
   return $ Downlink eng chan
 
 -- | Send data to the website.
-putDownlink :: (Sunroof a, SunroofArgument a) 
+putDownlink :: (Sunroof a, SunroofArgument a)
             => Downlink a -> JSA a -> IO ()
 putDownlink (Downlink eng chan) val = asyncJS eng $ do
   v <- val
@@ -387,7 +387,7 @@ putDownlink (Downlink eng chan) val = asyncJS eng $ do
 
 -- | Request data in the downlink. This may block until
 --   data is available.
-getDownlink :: (Sunroof a, SunroofArgument a) 
+getDownlink :: (Sunroof a, SunroofArgument a)
             => Downlink a -> JSB a
 getDownlink (Downlink _eng chan) = readChan chan
 
@@ -395,11 +395,11 @@ getDownlink (Downlink _eng chan) = readChan chan
 -- Uplink API
 -- -------------------------------------------------------------
 
--- | 'Uplink's are an abstraction provided for sending 
+-- | 'Uplink's are an abstraction provided for sending
 --   Javascript data from the website back to the server.
 --   Only data that can be translated back to a Haskell
 --   value can be sent back.
---   The type parameter describes the elements 
+--   The type parameter describes the elements
 --   that are transmited through the uplink.
 data Uplink a = Uplink SunroofEngine Uniq
 
