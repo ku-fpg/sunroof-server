@@ -1,6 +1,6 @@
 Name:                sunroof-server
 Version:             0.1
-Synopsis:            Monadic Javascript Compiler Server Utilities
+Synopsis:            Monadic Javascript Compiler - Server Utilities
 Homepage:            https://github.com/ku-fpg/sunroof-server
 Bug-reports:         https://github.com/ku-fpg/sunroof-server
 License:             BSD3
