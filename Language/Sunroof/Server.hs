@@ -75,7 +75,7 @@ import Language.Sunroof.JavaScript
   , literal, showExpr
   , scopeForEffect )
 import Language.Sunroof.Classes ( Uniq )
-import Language.Sunroof.Compiler ( compileJSI, extractProgramJS )
+import Language.Sunroof.Compiler ( compileJS )
 
 -- -------------------------------------------------------------
 -- Communication and Compilation
@@ -134,7 +134,7 @@ compileRequestJS engine jsm = do
   -- Allocate a standard amount of uniq for compilation
   uq <- docUniqs compileUniqAlloc engine
   -- Compile
-  (stmts, uq') <- compileJSI (compilerOpts engine) uq $ extractProgramJS return jsm
+  (stmts, uq') <- compileJS (compilerOpts engine) uq return jsm
   -- Check if the allocated amount was sufficient
   let txt = showExpr False $ scopeForEffect stmts
 
@@ -147,7 +147,7 @@ compileRequestJS engine jsm = do
       -- Allocate all that are needed
       newUq <- docUniqs (uq' - uq) engine
       -- Compile again
-      (stmts', _) <- compileJSI (compilerOpts engine) newUq $ extractProgramJS return jsm
+      (stmts', _) <- compileJS (compilerOpts engine) newUq return jsm
       let txt' = showExpr False $ scopeForEffect stmts'
       compileLog engine txt'
       return txt'
