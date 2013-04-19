@@ -372,14 +372,14 @@ instance Default SunroofServerOptions where
 data Downlink a = Downlink SunroofEngine (JSChan a)
 
 -- | Create a new downlink.
-newDownlink :: forall a . (Sunroof a, SunroofArgument a)
+newDownlink :: forall a . (SunroofArgument a)
             => SunroofEngine -> IO (Downlink a)
 newDownlink eng = do
   chan <- rsyncJS eng (newChan :: JSA (JSChan a))
   return $ Downlink eng chan
 
 -- | Send data to the website.
-putDownlink :: (Sunroof a, SunroofArgument a)
+putDownlink :: (SunroofArgument a)
             => Downlink a -> JSA a -> IO ()
 putDownlink (Downlink eng chan) val = asyncJS eng $ do
   v <- val
@@ -387,7 +387,7 @@ putDownlink (Downlink eng chan) val = asyncJS eng $ do
 
 -- | Request data in the downlink. This may block until
 --   data is available.
-getDownlink :: (Sunroof a, SunroofArgument a)
+getDownlink :: (SunroofArgument a)
             => Downlink a -> JSB a
 getDownlink (Downlink _eng chan) = readChan chan
 
