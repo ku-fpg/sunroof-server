@@ -70,6 +70,7 @@ import Web.KansasComet
 import qualified Web.KansasComet as KC
 
 import Language.Sunroof
+import Language.Sunroof.JS.Args
 import Language.Sunroof.JavaScript
   ( Expr
   , literal, showExpr
@@ -168,9 +169,11 @@ asyncJS engine jsm = do
 --   The result value is given the corresponding Haskell type,
 --   if possible (see 'SunroofResult').
 syncJS :: forall a t . (SunroofResult a) => SunroofEngine -> JS t a -> IO (ResultOf a)
-syncJS engine jsm | typeOf (Proxy :: Proxy a) == Unit = do
+{-
+syncJS engine jsm | typesOf (Proxy :: Proxy a) == [Unit] = do
   _ <- syncJS engine (jsm >> return (0 :: JSNumber))
   return $ jsonToValue (Proxy :: Proxy a) Null
+-}
 syncJS engine jsm = do
   up <- newUplink engine
   t0 <- getCurrentTime
@@ -410,8 +413,10 @@ newUplink eng = do
   return $ Uplink eng u
 
 -- | Send Javascript data back to the server.
-putUplink :: (Sunroof a) => a -> Uplink a -> JS t ()
-putUplink a (Uplink _ u) = kc_reply (js u) a
+putUplink :: (SunroofArgument a) => a -> Uplink a -> JS t ()
+putUplink a (Uplink _ u) =
+        do o :: JSArgs a <- toJSArgs a
+           kc_reply (js u) o
 
 -- | Request data in the uplink. This may block until
 --   data is available.
@@ -419,8 +424,12 @@ getUplink :: forall a . (SunroofResult a) => Uplink a -> IO (ResultOf a)
 getUplink (Uplink eng u) = do
   val <- KC.getReply (cometDocument eng) u
   -- TODO: make this throw an exception if it goes wrong (I supose error does this already)
-  return $ jsonToValue (Proxy :: Proxy a) val
-
+  return $ jsonToValue (Proxy :: Proxy (JSArgs a)) val
+{-
+  case val of
+    (Array ss) -> return $ jsonToValue' (Proxy :: Proxy a) $ V.toList ss
+    _ -> error $ "getUplink: expecting Array, found " ++ show val
+-}
 -- -------------------------------------------------------------
 -- Comet Javascript API
 -- -------------------------------------------------------------
@@ -435,7 +444,7 @@ kc_reply n a = fun "$.kc.reply" `apply` (n,a)
 -- -----------------------------------------------------------------------
 
 -- | Provides correspondant Haskell types for certain Sunroof types.
-class (Sunroof a) => SunroofResult a where
+class (SunroofArgument a) => SunroofResult a where
   -- | The Haskell value type associated with this 'Sunroof' type.
   type ResultOf a
   -- | Converts the given JSON value to the corresponding
@@ -443,11 +452,20 @@ class (Sunroof a) => SunroofResult a where
   --   not be converted.
   jsonToValue :: Proxy a -> Value -> ResultOf a
 
+  jsonToValue' :: Proxy a -> [Value] -> ResultOf a
+  jsonToValue' _ [s] = jsonToValue (Proxy :: Proxy a) s
+  jsonToValue' _ ss  = error $ "jsonToValue': JSON value is not a single element array : " ++ show ss
+
 -- | @null@ can be translated to @()@.
 instance SunroofResult () where
   type ResultOf () = ()
   jsonToValue _ (Null) = ()
   jsonToValue _ v = error $ "jsonToValue: JSON value is not unit: " ++ show v
+
+  jsonToValue' _ [] = ()
+  jsonToValue' _ [Null] = ()    -- not quite right yet
+  jsonToValue' _ ss  = error $ "jsonToValue': JSON value is not a empty array : " ++ show ss
+
 
 -- | 'JSBool' can be translated to 'Bool'.
 instance SunroofResult JSBool where
@@ -469,9 +487,22 @@ instance SunroofResult JSString where
   jsonToValue _ v = error $ "jsonToValue: JSON value is not a string: " ++ show v
 
 -- | 'JSArray' can be translated to a list of the 'ResultOf' the values.
-instance forall a . SunroofResult a => SunroofResult (JSArray a) where
+instance forall a . (Sunroof a, SunroofResult a) => SunroofResult (JSArray a) where
   type ResultOf (JSArray a) = [ResultOf a]
   jsonToValue _ (Array ss) = map (jsonToValue (Proxy :: Proxy a)) $ V.toList ss
+  jsonToValue _ v = error $ "jsonToValue: JSON value is not an array : " ++ show v
+
+-- ResultOf a ~ ResultOf (JSArgs a))
+instance forall a . SunroofResult a => SunroofResult (JSArgs a) where
+  type ResultOf (JSArgs a) = ResultOf a
+  jsonToValue _ (Array ss) = jsonToValue' (Proxy :: Proxy a) $ V.toList ss
+  jsonToValue _ v = error $ "jsonToValue: JSON value is not an array : " ++ show v
+
+instance forall a b . (Sunroof a, SunroofResult a, Sunroof b, SunroofResult b) => SunroofResult (a,b) where
+  type ResultOf (a,b) = (ResultOf a,ResultOf b)
+  jsonToValue _ (Array ss) = case V.toList ss of
+          [x1,x2] -> (jsonToValue (Proxy :: Proxy a) x1, jsonToValue (Proxy :: Proxy b) x2)
+          xs -> error $ "sonToValue: JSON value is not a 2-tuple : " ++ show xs
   jsonToValue _ v = error $ "jsonToValue: JSON value is not an array : " ++ show v
 
 -- | Converts a JSON value to a Sunroof Javascript expression.
