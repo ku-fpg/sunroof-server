@@ -46,13 +46,13 @@ module Language.Sunroof.Server
   ) where
 
 import Data.Aeson.Types ( Value(..), Object, Array )
-import Data.Attoparsec.Number ( Number(..) )
 import Data.List ( intercalate )
 import Data.Text ( unpack )
 import Data.Proxy ( Proxy(..) )
 import Data.Default ( Default(..) )
 import Data.Semigroup
 import Data.Time.Clock
+import Data.Scientific ( toRealFloat )
 import qualified Data.Vector as V
 import qualified Data.HashMap.Strict as M
 import System.FilePath((</>))
@@ -60,7 +60,7 @@ import System.FilePath((</>))
 import Control.Monad.IO.Class ( liftIO )
 import Control.Concurrent.STM
 
-import Network.Wai.Handler.Warp ( Port, settingsPort )
+import Network.Wai.Handler.Warp ( Port, setPort )
 import Network.Wai.Middleware.Static
 import qualified Web.Scotty as SC
 import Web.KansasComet
@@ -304,7 +304,7 @@ data SunroofServerOptions = SunroofServerOptions
 --   Look into the example folder to see all of this in action.
 sunroofServer :: SunroofServerOptions -> SunroofApp -> IO ()
 sunroofServer opts cometApp = do
-  let warpSettings = (SC.settings def) { settingsPort = cometPort opts }
+  let warpSettings = setPort (cometPort opts) (SC.settings def)
   -- Be quiet scotty! ... and beam me up!
   let scottyOptions = def { SC.verbose = 0
                           , SC.settings = warpSettings }
@@ -476,8 +476,7 @@ instance SunroofResult JSBool where
 -- | 'JSNumber' can be translated to 'Double'.
 instance SunroofResult JSNumber where
   type ResultOf JSNumber = Double
-  jsonToValue _ (Number (I i)) = fromInteger i
-  jsonToValue _ (Number (D d)) = d
+  jsonToValue _ (Number scientific) = toRealFloat scientific
   jsonToValue _ v = error $ "jsonToValue: JSON value is not a number: " ++ show v
 
 -- | 'JSString' can be translated to 'String'.
@@ -508,8 +507,7 @@ instance forall a b . (Sunroof a, SunroofResult a, Sunroof b, SunroofResult b) =
 -- | Converts a JSON value to a Sunroof Javascript expression.
 jsonToJS :: Value -> Expr
 jsonToJS (Bool b)       = unbox $ js b
-jsonToJS (Number (I i)) = unbox $ js i
-jsonToJS (Number (D d)) = unbox $ js d
+jsonToJS (Number scientific) = unbox $ js scientific
 jsonToJS (String s)     = unbox $ js $ unpack s
 jsonToJS (Null)         = unbox $ nullJS
 jsonToJS (Array arr)    = jsonArrayToJS arr
