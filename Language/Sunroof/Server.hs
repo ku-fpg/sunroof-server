@@ -47,7 +47,7 @@ module Language.Sunroof.Server
 
 import Data.Aeson.Types ( Value(..), Object, Array )
 import Data.List ( intercalate )
-import Data.Text ( unpack )
+import Data.Text ( unpack, pack )
 import Data.Proxy ( Proxy(..) )
 import Data.Default ( Default(..) )
 import Data.Semigroup
@@ -63,11 +63,11 @@ import Control.Concurrent.STM
 import Network.Wai.Handler.Warp ( Port, setPort )
 import Network.Wai.Middleware.Static
 import qualified Web.Scotty as SC
-import Web.KansasComet
+import Web.Scotty.Comet
   ( send, connect
   , Document, Options
   , kCometPlugin )
-import qualified Web.KansasComet as KC
+import qualified Web.Scotty.Comet as KC
 
 import Language.Sunroof
 import Language.Sunroof.JS.Args
@@ -161,7 +161,7 @@ asyncJS engine jsm = do
   addCompileTime engine t0
 
   t1 <- getCurrentTime
-  send (cometDocument engine) src  -- send it, and forget it
+  send (cometDocument engine) (pack src)  -- send it, and forget it
   addSendTime engine t1
   return ()
 
@@ -182,7 +182,7 @@ syncJS engine jsm = do
           up # putUplink v
   addCompileTime engine t0
   t1 <- getCurrentTime
-  send (cometDocument engine) src
+  send (cometDocument engine) (pack src)
   addSendTime engine t1
   t2 <- getCurrentTime
   -- There is *no* race condition in here. If no-one is listening,
@@ -209,7 +209,7 @@ rsyncJS engine jsm = do
   addCompileTime engine t0
 
   t1 <- getCurrentTime
-  send (cometDocument engine) src
+  send (cometDocument engine) (pack src)
   addSendTime engine t1
 
   t2 <- getCurrentTime
