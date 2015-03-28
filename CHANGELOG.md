@@ -1,2 +1,2 @@
-## 0.2.3
+## 0.2.2
 * Bump `filepath` and `wai-middleware-static` upper version bounds
