@@ -49,7 +49,7 @@ import Data.Aeson.Types ( Value(..), Object, Array )
 import Data.List ( intercalate )
 import Data.Text ( unpack, pack )
 import Data.Proxy ( Proxy(..) )
-import Data.Default ( Default(..) )
+import Data.Default.Class ( Default(..) )
 import Data.Semigroup
 import Data.Time.Clock
 import Data.Scientific ( toRealFloat )
