@@ -57,7 +57,6 @@ import qualified Data.Vector as V
 import qualified Data.HashMap.Strict as M
 import System.FilePath((</>))
 
-import Control.Monad.IO.Class ( liftIO )
 import Control.Concurrent.STM
 
 import Network.Wai.Handler.Warp ( Port, setPort )
@@ -308,8 +307,9 @@ sunroofServer opts cometApp = do
   -- Be quiet scotty! ... and beam me up!
   let scottyOptions = def { SC.verbose = 0
                           , SC.settings = warpSettings }
+  kcomet <- kCometPlugin
+  connectApp <- connect (cometOptions opts) $ wrapDocument opts cometApp
   SC.scottyOpts scottyOptions $ do
-    kcomet <- liftIO kCometPlugin
     let rootFile = cometResourceBaseDir opts </> cometIndexFile opts
     let custom_policy = cometPolicy opts
     let pol = only [("", rootFile)
@@ -317,7 +317,7 @@ sunroofServer opts cometApp = do
               <|> (custom_policy
                    >-> addBase (cometResourceBaseDir opts))
     SC.middleware $ staticPolicy pol
-    connect (cometOptions opts) $ wrapDocument opts cometApp
+    connectApp
 
 -- | Wrap the document into the sunroof engine.
 wrapDocument :: SunroofServerOptions -> SunroofApp -> (Document -> IO ())
