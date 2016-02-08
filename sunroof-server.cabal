@@ -22,12 +22,12 @@ Extra-source-files:
 Library
   Exposed-modules: Language.Sunroof.Server
   default-language:    Haskell2010
-  build-depends:       aeson                 >= 0.7   && < 0.10,
+  build-depends:       aeson                 >= 0.7   && < 0.12,
                        base                  >= 4.6   && < 5,
                        data-default-class    == 0.0.*,
                        filepath              >= 1.3   && < 1.5,
                        kansas-comet          >= 0.4   && < 0.5,
-                       scotty                >= 0.10  && < 0.11,
+                       scotty                >= 0.10  && < 0.12,
                        scientific            >= 0.3.2 && < 0.4,
                        semigroups            >= 0.9,
                        stm                   >= 2.2,
@@ -37,8 +37,8 @@ Library
                        time                  >= 1.4,
                        unordered-containers  >= 0.1.3.0,
                        vector                >= 0.7.1,
-                       wai-middleware-static >= 0.6   && < 0.8,
-                       warp                  >= 3.0   && < 3.1
+                       wai-middleware-static >= 0.6   && < 0.9,
+                       warp                  >= 3.0   && < 3.3
   GHC-options: -Wall
 
 source-repository head
